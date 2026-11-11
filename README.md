@@ -20,6 +20,10 @@ My hypothesis: away didn't shoot *more*, they shot *better*. I tested it two way
 - Their shooters also had **more space**: the nearest defender was further away and there were fewer bodies between ball and goal.
 - So the scoreline is about **chance quality, not volume**. Both measures point the same way.
 
+![Shot map](docs/shot_map.png)
+
+*Every shot of the match, with both teams turned to attack left → right. Stars are goals. Away's shots (red) cluster inside the box and close to goal; many of home's (blue) come from the edge of the box or further out.*
+
 This describes one match of about 30 shots. It is not a fitted expected-goals (xG) model, which would need many matches.
 
 ## What's in the repo
@@ -41,6 +45,10 @@ src/pitch.py                      shared helpers: loading, pitch drawing, frame 
 - **Defensive lines:** the home back line and the offside line are drawn, with their width and flatness.
 - **Pitch control:** a simplified Spearman (2018) time-to-intercept model shows which team could reach each part of the pitch first.
 - **Line-ups:** kick-off positions, plus average shapes in and out of possession.
+
+![Goal viewer](docs/goal_viewer.png)
+
+*The viewer two seconds before an away goal. The background is pitch control (red = away can get there first, blue = home). The light-blue line is home's back four, and the dashed orange line is the offside line. The ringed player is the away striker, who is about to receive the pass. The side panel tracks the time to goal, the shape of the home defence, how much of the pitch away control, and the event list leading up to the goal.*
 
 ## Data
 

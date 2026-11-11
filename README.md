@@ -1,6 +1,6 @@
 # Veo Football Analytics Sprint: why did the away side win?
 
-My work from the **Veo Football Analytics Sprint** (Copenhagen, 9 November 2026). The sprint used one full 11-a-side match captured on a Veo camera: player tracking, ball tracking and detected on-ball events.
+A project from a **mini hackathon**: the **Veo Football Analytics Sprint** at Veo's offices in Copenhagen (9 November 2026). In one 90-minute sprint, mixed teams got one full 11-a-side match captured on a Veo camera (player tracking, ball tracking and detected on-ball events) and had to find something interesting in it. This repo is my part of that work, cleaned up afterwards.
 
 ## The question
 

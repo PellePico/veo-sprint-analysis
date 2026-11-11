@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goal Viewer</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --home: #1f77b4; --away: #d62728; --ref: #999999; --accent: #ffb000; --nine: #ffe600;
+    --pitch: #1e4d2b; --pitch2: #225631; --mark: rgba(255,255,255,.75);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  .tabs button.lu.on { background: #2f81f7; border-color: #2f81f7; }
+  .seg button.on { background: #2f81f7; border-color: #2f81f7; }
+  .note { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
+  .plist .row span:first-child { color: var(--text); font-weight: 600; width: 44px; flex: none; }
+  .plist .row span:nth-child(2) { color: var(--muted); flex: 1; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .tabs button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+                 padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  .tabs button.on { background: var(--away); border-color: var(--away); }
+  .why { color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  svg { width: 100%; height: auto; display: block; }
+  .controls { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .controls button, .controls select { background: #21262d; color: var(--text); border: 1px solid var(--line);
+                     border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+  .controls label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .timeline { position: relative; margin-top: 10px; }
+  .timeline input { width: 100%; accent-color: var(--accent); }
+  .ticks { position: relative; height: 18px; }
+  .tick { position: absolute; top: 0; width: 2px; height: 10px; transform: translateX(-1px); cursor: pointer; }
+  .tick.goal { height: 16px; width: 4px; background: var(--nine) !important; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  .big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dashed var(--line); font-variant-numeric: tabular-nums; }
+  .row:last-child { border-bottom: 0; }
+  .row span:first-child { color: var(--muted); }
+  .warn { color: var(--accent); }
+  .events { max-height: 260px; overflow: auto; }
+  .ev { padding: 5px 6px; border-radius: 6px; cursor: pointer; display: flex; gap: 8px; }
+  .ev:hover { background: #21262d; }
+  .ev.now { background: #2d333b; outline: 1px solid var(--accent); }
+  .ev .t { color: var(--muted); width: 48px; flex: none; font-variant-numeric: tabular-nums; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; }
+  .legend { color: var(--muted); font-size: 12px; line-height: 1.7; }
+  .legend i { display: inline-block; width: 18px; vertical-align: middle; }
+  kbd { background: #21262d; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Goal viewer · away attack →</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="why" id="why"></div>
+</header>
+<main id="lineupView" hidden>
+  <section class="stage">
+    <div class="controls seg" style="margin:0 0 10px">
+      <button data-h="1">Half 1 kick-off</button>
+      <button data-h="2">Half 2 kick-off</button>
+      <span style="width:12px"></span>
+      <button data-v="kickoff">Kick-off moment</button>
+      <button data-v="def">Avg shape when defending</button>
+      <button data-v="att">Avg shape when attacking</button>
+    </div>
+    <svg id="lpitch" viewBox="-55.5 -37 111 74" aria-label="line-up pitch"></svg>
+    <p class="note" id="lnote"></p>
+  </section>
+  <aside class="side">
+    <div class="card plist"><h2 style="color:#ff8a8a">away · back → front</h2><div id="listA"></div></div>
+    <div class="card plist"><h2 style="color:#8ac6ff">home · back → front</h2><div id="listH"></div></div>
+    <div class="card"><h2>Half-time changes</h2><div id="subs"></div></div>
+  </aside>
+</main>
+<main id="goalView">
+  <section class="stage">
+    <svg id="pitch" viewBox="-55.5 -37 111 74" aria-label="pitch"></svg>
+    <div class="timeline">
+      <input type="range" id="slider" min="0" value="0" step="1">
+      <div class="ticks" id="ticks"></div>
+    </div>
+    <div class="controls">
+      <button id="prev" title="Back 0.1 s (←)">◀ 0.1s</button>
+      <button id="play" title="Play / pause (space)">▶ Play</button>
+      <button id="next" title="Forward 0.1 s (→)">0.1s ▶</button>
+      <button id="nextEv" title="Next event (E)">Next event ⏭</button>
+      <select id="speed" title="Playback speed">
+        <option value="0.25">0.25×</option><option value="0.5" selected>0.5×</option>
+        <option value="1">1× real time</option>
+      </select>
+      <label><input type="checkbox" id="trails" checked> trails</label>
+      <label><input type="checkbox" id="backline" checked> home back line</label>
+      <label><input type="checkbox" id="offside" checked> offside line</label>
+      <label><input type="checkbox" id="pcToggle" checked> pitch control</label>
+    </div>
+  </section>
+  <aside class="side">
+    <div class="card">
+      <h2>Time</h2>
+      <div class="big" id="toGoal">–</div>
+      <div class="row"><span>Video time</span><span id="video">–</span></div>
+      <div class="row"><span>Frame</span><span id="exact">–</span></div>
+    </div>
+    <div class="card">
+      <h2>Home defence</h2>
+      <div class="row"><span>Offside line from own goal</span><span id="lineH">–</span></div>
+      <div class="row"><span>Back four width</span><span id="width">–</span></div>
+      <div class="row"><span>Back four flatness (front–back)</span><span id="flat">–</span></div>
+      <div class="row"><span>Home players tracked</span><span id="nHome">–</span></div>
+    </div>
+    <div class="card">
+      <h2>Pitch control (away)</h2>
+      <div class="row"><span>Share of whole pitch</span><span id="pcAll">–</span></div>
+      <div class="row"><span>Share of home penalty box</span><span id="pcBox">–</span></div>
+    </div>
+    <div class="card">
+      <h2>away no. 9</h2>
+      <div class="row"><span>vs offside line</span><span id="nineLine">–</span></div>
+      <div class="row"><span>Position</span><span id="ninePos">–</span></div>
+    </div>
+    <div class="card">
+      <h2>Events (click to jump)</h2>
+      <div class="events" id="events"></div>
+    </div>
+    <div class="card legend">
+      <i style="border-top:3px solid #9fd3ff"></i> home back four (4 deepest outfield)<br>
+      <i style="border-top:2px dashed var(--accent)"></i> offside line (2nd-last home player)<br>
+      <i style="border-top:3px solid var(--nine)"></i> ring = away no. 9<br>
+      <i style="height:10px;background:linear-gradient(90deg,#d62728,#7a4f7d,#1f77b4)"></i> pitch control: red = away reaches it first, blue = home, faint = contested<br>
+      dashed outline = suspect tracking (jump &gt; 11 m/s)<br>
+      faded = player missing from one tracking frame<br>
+      Keys: <kbd>←</kbd><kbd>→</kbd> 0.1 s · <kbd>⇧</kbd>+arrows 1 s · <kbd>space</kbd> play · <kbd>E</kbd> next event · <kbd>1</kbd><kbd>3</kbd><kbd>5</kbd> goal
+    </div>
+  </aside>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+const LINEUPS = /*__LINEUPS__*/null;
+let mode = "goal", lHalf = "1", lView = "kickoff";
+const HL = 52.5, HW = 33.85;
+const COL = { h: "#1f77b4", a: "#d62728", r: "#999999" };
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+let G = null, key = null, i = 0, timer = null;
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+// SVG y points down; draw the team's left (+y_att) at the top
+const sx = x => x, sy = y => -y;
+
+function drawPitch(svg) {
+  svg.innerHTML = "";
+  for (let k = 0; k < 10; k++)
+    el("rect", { x: -HL + k * 10.5, y: -HW, width: 10.5, height: 2 * HW, fill: k % 2 ? "var(--pitch)" : "var(--pitch2)" }, svg);
+  el("image", { class: "pc", x: -HL, y: -HW, width: 2 * HL, height: 2 * HW, preserveAspectRatio: "none",
+    visibility: "hidden" }, svg);
+  const m = { fill: "none", stroke: "var(--mark)", "stroke-width": 0.25 };
+  el("rect", { x: -HL, y: -HW, width: 2 * HL, height: 2 * HW, ...m }, svg);
+  el("line", { x1: 0, y1: -HW, x2: 0, y2: HW, ...m }, svg);
+  el("circle", { cx: 0, cy: 0, r: 9.15, ...m }, svg);
+  for (const s of [-1, 1]) {
+    el("rect", { x: s > 0 ? HL - 16.5 : -HL, y: -20.15, width: 16.5, height: 40.3, ...m }, svg);
+    el("rect", { x: s > 0 ? HL - 5.5 : -HL, y: -9.16, width: 5.5, height: 18.32, ...m }, svg);
+    el("line", { x1: s * HL, y1: -3.66, x2: s * HL, y2: 3.66, stroke: "#fff", "stroke-width": 0.9 }, svg);
+  }
+  el("text", { x: HL - 1, y: -HW - 1, "text-anchor": "end", "font-size": 2, fill: "var(--muted)" }, svg).textContent = "home goal →";
+  return el("g", {}, svg);
+}
+
+function fmtVideo(ms) {
+  const s = ms / 1000, m = Math.floor(s / 60);
+  return `${m}:${(s - m * 60).toFixed(1).padStart(4, "0")}`;
+}
+
+function analyse(f) {
+  const home = f.p.filter(p => p[1] === "h");
+  const out = home.filter(p => !p[5]).sort((a, b) => b[2] - a[2]);
+  const back4 = out.slice(0, 4);
+  const byX = [...home].sort((a, b) => b[2] - a[2]);
+  const lineX = byX.length >= 2 ? byX[1][2] : null;
+  const ys = back4.map(p => p[3]), xs = back4.map(p => p[2]);
+  return {
+    back4, lineX, nHome: home.length,
+    width: back4.length ? Math.max(...ys) - Math.min(...ys) : null,
+    flat: back4.length ? Math.max(...xs) - Math.min(...xs) : null,
+  };
+}
+
+// pitch control layer: one byte per ~2 m cell, 0 = away controls, 255 = home
+const pcCanvas = document.createElement("canvas");
+function drawPitchControl(f) {
+  const img = $("pitch").querySelector("image.pc");
+  if (!$("pcToggle").checked || !f.pc) { img.setAttribute("visibility", "hidden"); return null; }
+  const [nx, ny] = G.pc_grid, raw = atob(f.pc);
+  pcCanvas.width = nx; pcCanvas.height = ny;
+  const ctx = pcCanvas.getContext("2d"), im = ctx.createImageData(nx, ny);
+  let awayAll = 0, awayBox = 0, nBox = 0;
+  for (let k = 0; k < nx * ny; k++) {
+    const p = raw.charCodeAt(k) / 255;                     // P(home controls)
+    const strength = Math.abs(2 * p - 1);
+    const c = p >= 0.5 ? [31, 119, 180] : [214, 39, 40];
+    im.data.set([...c, Math.round(20 + 110 * strength)], 4 * k);
+    awayAll += 1 - p;
+    const x = -HL + ((k % nx) + 0.5) * (2 * HL) / nx, y = HW - (Math.floor(k / nx) + 0.5) * (2 * HW) / ny;
+    if (x > HL - 16.5 && Math.abs(y) < 20.15) { awayBox += 1 - p; nBox++; }
+  }
+  ctx.putImageData(im, 0, 0);
+  img.setAttribute("href", pcCanvas.toDataURL());
+  img.setAttribute("visibility", "visible");
+  return { all: awayAll / (nx * ny), box: awayBox / nBox };
+}
+
+function render() {
+  const f = G.frames[i];
+  const layer = $("pitch").lastChild;
+  layer.innerHTML = "";
+  const A = analyse(f);
+  const PC = drawPitchControl(f);
+  $("pcAll").textContent = PC ? `${Math.round(100 * PC.all)}%` : "–";
+  $("pcBox").textContent = PC ? `${Math.round(100 * PC.box)}%` : "–";
+
+  // trails (last 1.5 s)
+  if ($("trails").checked) {
+    const from = Math.max(0, i - 15), path = {};
+    for (let k = from; k <= i; k++)
+      for (const p of G.frames[k].p) (path[p[1] + p[0]] ||= []).push(p);
+    for (const id in path) {
+      const pts = path[id]; if (pts.length < 2) continue;
+      el("polyline", { points: pts.map(p => `${sx(p[2])},${sy(p[3])}`).join(" "), fill: "none",
+        stroke: COL[pts[0][1]], "stroke-width": 0.35, opacity: 0.45 }, layer);
+    }
+    const bt = [];
+    for (let k = Math.max(0, i - 10); k <= i; k++) if (G.frames[k].ball) bt.push(G.frames[k].ball);
+    if (bt.length > 1) el("polyline", { points: bt.map(b => `${sx(b[0])},${sy(b[1])}`).join(" "),
+      fill: "none", stroke: "#fff", "stroke-width": 0.3, "stroke-dasharray": "0.6 0.4", opacity: 0.8 }, layer);
+  }
+  // offside line
+  if ($("offside").checked && A.lineX !== null)
+    el("line", { x1: A.lineX, y1: -HW, x2: A.lineX, y2: HW, stroke: "var(--accent)", "stroke-width": 0.3,
+      "stroke-dasharray": "1 0.7" }, layer);
+  // back four
+  if ($("backline").checked && A.back4.length > 1) {
+    const b4 = [...A.back4].sort((a, b) => a[3] - b[3]);
+    el("polyline", { points: b4.map(p => `${sx(p[2])},${sy(p[3])}`).join(" "), fill: "none",
+      stroke: "#9fd3ff", "stroke-width": 0.5, opacity: 0.9 }, layer);
+  }
+  // players
+  for (const p of f.p) {
+    const [num, t, x, y, flag] = p;
+    const g = el("g", { opacity: flag === 3 ? 0.45 : 1 }, layer);
+    el("circle", { cx: sx(x), cy: sy(y), r: 1.25, fill: COL[t], stroke: "#fff", "stroke-width": 0.2,
+      "stroke-dasharray": flag === 2 ? "0.5 0.35" : "none" }, g);
+    if (t !== "r") el("text", { x: sx(x), y: sy(y) + 0.55, "text-anchor": "middle", "font-size": 1.5,
+      "font-weight": 700, fill: "#fff" }, g).textContent = num;
+    if (t === "a" && num === "9")
+      el("circle", { cx: sx(x), cy: sy(y), r: 2.1, fill: "none", stroke: "var(--nine)", "stroke-width": 0.35 }, g);
+  }
+  // ball
+  if (f.ball) el("circle", { cx: sx(f.ball[0]), cy: sy(f.ball[1]), r: 0.7, fill: "#fff", stroke: "#000", "stroke-width": 0.25 }, layer);
+
+  // latest event banner (shown for 1.5 s)
+  const recent = G.events.filter(e => e.t <= f.t && f.t - e.t <= 1500).pop();
+  if (recent) {
+    const tx = el("text", { x: 0, y: -HW + 3, "text-anchor": "middle", "font-size": 2.4, "font-weight": 700,
+      fill: recent.team === "away" ? "#ff8a8a" : "#8ac6ff", stroke: "#000", "stroke-width": 0.5, "paint-order": "stroke" }, layer);
+    tx.textContent = recent.text;
+  }
+
+  // side panel
+  const dt = (f.t - G.t_goal) / 1000;
+  $("toGoal").textContent = dt <= 0 ? `${dt.toFixed(1)} s to goal` : `+${dt.toFixed(1)} s after goal`;
+  $("video").textContent = fmtVideo(f.t);
+  $("exact").innerHTML = f.exact ? "real tracking frame" : '<span class="warn">estimated (between frames)</span>';
+  $("lineH").textContent = A.lineX !== null ? `${(HL - A.lineX).toFixed(1)} m` : "–";
+  $("width").textContent = A.width !== null ? `${A.width.toFixed(1)} m` : "–";
+  $("flat").textContent = A.flat !== null ? `${A.flat.toFixed(1)} m` : "–";
+  $("nHome").innerHTML = A.nHome < 11 ? `<span class="warn">${A.nHome}/11</span>` : `${A.nHome}/11`;
+  const nine = f.p.find(p => p[1] === "a" && p[0] === "9");
+  if (nine && A.lineX !== null) {
+    const m = nine[2] - A.lineX;
+    $("nineLine").textContent = `${m > 0 ? "+" : ""}${m.toFixed(1)} m ${m > 0 ? "beyond" : "behind"}`;
+    const ballX = f.ball ? f.ball[0] : -Infinity;
+    const pos = nine[2] > 0 && nine[2] > A.lineX && nine[2] > ballX;
+    $("ninePos").innerHTML = pos ? '<span class="warn">in offside position</span>' : "onside position";
+  } else { $("nineLine").textContent = "not tracked"; $("ninePos").textContent = "–"; }
+
+  document.querySelectorAll(".ev").forEach(d => d.classList.toggle("now", +d.dataset.t === (recent && recent.t)));
+  $("slider").value = i;
+}
+
+function setMode(m) {
+  mode = m;
+  $("goalView").hidden = m !== "goal";
+  $("lineupView").hidden = m !== "lineup";
+  $("legendWrap") && ($("legendWrap").hidden = m !== "goal");
+}
+
+function renderLineup() {
+  const L = LINEUPS[lHalf], rows = L[lView];
+  document.querySelectorAll(".seg [data-h]").forEach(b => b.classList.toggle("on", b.dataset.h === lHalf));
+  document.querySelectorAll(".seg [data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === lView));
+  const layer = drawPitch($("lpitch"));
+  el("text", { x: -HL + 1, y: -HW - 1, "font-size": 2, fill: "#8ac6ff" }, $("lpitch")).textContent = "← home attack";
+  for (const p of rows) {
+    const [num, t, x, y, flag, gk, mins] = p;
+    const g = el("g", { opacity: flag === 3 ? 0.45 : 1 }, layer);
+    el("title", {}, g).textContent = `${t === "a" ? "away" : t === "h" ? "home" : "ref"} ${num}${gk ? " (GK)" : ""}` +
+      (mins ? ` · ${mins} min tracked this half` : "") + (flag === 3 ? " · not tracked at kick-off, nearest position" : "");
+    el("circle", { cx: sx(x), cy: sy(y), r: 1.6, fill: COL[t], stroke: gk ? "#ffe600" : "#fff", "stroke-width": gk ? 0.4 : 0.2 }, g);
+    if (t !== "r") el("text", { x: sx(x), y: sy(y) + 0.65, "text-anchor": "middle", "font-size": 1.8,
+      "font-weight": 700, fill: "#fff" }, g).textContent = num;
+  }
+  // side lists, back -> front from each team's own view (away attack +x, home attack -x)
+  const side = (t, y) => { const left = t === "a" ? y : -y; return Math.abs(left) < 10 ? "centre" : left > 0 ? "left" : "right"; };
+  for (const [t, id] of [["a", "listA"], ["h", "listH"]]) {
+    const ps = rows.filter(p => p[1] === t).sort((a, b) => t === "a" ? a[2] - b[2] : b[2] - a[2]);
+    $(id).innerHTML = ps.map(p => {
+      const fromGoal = t === "a" ? p[2] + HL : HL - p[2];
+      return `<div class="row"><span>${p[0]}${p[5] ? " GK" : ""}</span><span>${side(t, p[3])}${p[4] === 3 ? " · est." : ""}${p[6] ? ` · ${Math.round(p[6])}′` : ""}</span><span>${fromGoal.toFixed(0)} m</span></div>`;
+    }).join("") + `<p class="note">m = distance from own goal${rows[0] && rows[0][6] ? " · ′ = minutes in this view" : ""}</p>`;
+  }
+  const S = LINEUPS.subs;
+  $("subs").innerHTML = ["away", "home"].map(t =>
+    `<div class="row"><span>${t}</span><span>off ${S[t].off.join(", ") || "–"} · on ${S[t].on.join(", ") || "–"}</span></div>`).join("") +
+    `<p class="note">Players tracked in only one half. A short tracking gap can also land someone here, so check the video.</p>`;
+  $("lnote").textContent = lView === "kickoff"
+    ? `Kick-off, half ${lHalf}, video ${fmtVideo(L.t)}. Away attack →, home attack ←. Yellow ring = goalkeeper. Faded = not tracked at kick-off, shown at nearest tracked position.`
+    : `Average position in half ${lHalf}, only moments when the player's team was ${lView === "def" ? "WITHOUT" : "WITH"} the ball (team of the latest event, within 5 s). Both teams are shown in their own ${lView === "def" ? "defending" : "attacking"} shape, so they never happen at the same moment. Players with ≥ 3 min in this view. Rolling subs mean more than 11 per team can appear.`;
+  if (lView === "kickoff") {
+    const n = t => rows.filter(p => p[1] === t).length;
+    const miss = [["away", "a"], ["home", "h"]].filter(([, t]) => n(t) < 11).map(([name, t]) => `${name} ${n(t)}/11`);
+    if (miss.length) $("lnote").textContent += ` Only tracked at kick-off: ${miss.join(", ")} (the missing player has no ID in the tracking here).`;
+  }
+  $("why").textContent = "Line-ups: how each team stands";
+}
+
+function showLineups() {
+  stop(); setMode("lineup");
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.k === "lu"));
+  renderLineup();
+}
+
+function load(k) {
+  setMode("goal");
+  key = k; G = DATA[k]; i = 0; stop();
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+  $("why").textContent = `Goal ${k}: ${G.scorer} · start = ${G.why.toLowerCase()}`;
+  drawPitch($("pitch"));
+  $("slider").max = G.frames.length - 1;
+  const t0 = G.frames[0].t, span = G.frames.at(-1).t - t0;
+  $("ticks").innerHTML = "";
+  $("events").innerHTML = "";
+  for (const e of G.events) {
+    const d = document.createElement("div");
+    d.className = "tick" + (e.text.startsWith("goal") ? " goal" : "");
+    d.style.left = `${(100 * (e.t - t0)) / span}%`;
+    d.style.background = e.team === "away" ? "#ff6b6b" : "#6bb8ff";
+    d.title = e.text;
+    d.onclick = () => jumpTo(e.t);
+    $("ticks").appendChild(d);
+    const r = document.createElement("div");
+    r.className = "ev"; r.dataset.t = e.t;
+    r.innerHTML = `<span class="t">${((e.t - G.t_goal) / 1000).toFixed(1)}s</span>
+      <span class="dot" style="background:${e.team === "away" ? "#ff6b6b" : "#6bb8ff"}"></span><span>${e.text}</span>`;
+    r.onclick = () => jumpTo(e.t);
+    $("events").appendChild(r);
+  }
+  render();
+}
+
+function jumpTo(t) {
+  stop();
+  i = G.frames.reduce((best, f, k) => Math.abs(f.t - t) < Math.abs(G.frames[best].t - t) ? k : best, 0);
+  render();
+}
+function stepBy(n) { i = Math.min(G.frames.length - 1, Math.max(0, i + n)); render(); }
+function stop() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+function play() {
+  if (timer) return stop();
+  if (i >= G.frames.length - 1) i = 0;
+  $("play").textContent = "❚❚ Pause";
+  timer = setInterval(() => { if (i >= G.frames.length - 1) return stop(); stepBy(1); }, 100 / +$("speed").value);
+}
+function nextEvent() {
+  const t = G.frames[i].t, e = G.events.find(e => e.t > t + 50);
+  if (e) jumpTo(e.t);
+}
+
+for (const k of Object.keys(DATA)) {
+  const b = document.createElement("button");
+  b.textContent = `Goal ${k}`; b.dataset.k = k; b.onclick = () => load(k);
+  $("tabs").appendChild(b);
+}
+{
+  const b = document.createElement("button");
+  b.textContent = "Line-ups"; b.dataset.k = "lu"; b.className = "lu"; b.onclick = showLineups;
+  $("tabs").appendChild(b);
+}
+document.querySelectorAll(".seg [data-h]").forEach(b => b.onclick = () => { lHalf = b.dataset.h; renderLineup(); });
+document.querySelectorAll(".seg [data-v]").forEach(b => b.onclick = () => { lView = b.dataset.v; renderLineup(); });
+$("slider").oninput = e => { stop(); i = +e.target.value; render(); };
+$("prev").onclick = () => { stop(); stepBy(-1); };
+$("next").onclick = () => { stop(); stepBy(1); };
+$("play").onclick = play;
+$("nextEv").onclick = nextEvent;
+$("speed").onchange = () => { if (timer) { stop(); play(); } };
+for (const id of ["trails", "backline", "offside", "pcToggle"]) $(id).onchange = render;
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT") return;
+  if (e.key.toLowerCase() === "l") return showLineups();
+  if (mode !== "goal") { if (DATA[e.key]) load(e.key); return; }
+  if (e.key === "ArrowRight") { e.preventDefault(); stop(); stepBy(e.shiftKey ? 10 : 1); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); stop(); stepBy(e.shiftKey ? -10 : -1); }
+  else if (e.key === " ") { e.preventDefault(); play(); }
+  else if (e.key.toLowerCase() === "e") nextEvent();
+  else if (DATA[e.key]) load(e.key);
+});
+load(Object.keys(DATA)[0]);
+</script>
+</body>
+</html>

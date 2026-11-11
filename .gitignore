@@ -1,0 +1,12 @@
+# Match data is not redistributable (Veo sprint terms)
+data/
+*.csv
+*.parquet
+*.mp4
+goal_viewer/goal_viewer.html
+*.png
+
+# Python / Jupyter
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
